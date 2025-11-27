@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Screenshot Helper - ClickUp Due Today</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #333;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+    }
+
+    .instructions {
+      background: #222;
+      color: #fff;
+      padding: 16px 24px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      text-align: center;
+      font-size: 14px;
+    }
+
+    .instructions code {
+      background: #444;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-family: monospace;
+    }
+
+    /* Exact 1280x800 screenshot frame */
+    .screenshot-frame {
+      width: 1280px;
+      height: 800px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 60px;
+      border: 4px solid #fff;
+      position: relative;
+    }
+
+    .screenshot-frame::before {
+      content: '1280 × 800';
+      position: absolute;
+      top: -30px;
+      left: 0;
+      color: #888;
+      font-size: 12px;
+    }
+
+    .browser-frame {
+      background: #f5f5f5;
+      border-radius: 12px;
+      box-shadow: 0 25px 80px rgba(0, 0, 0, 0.4);
+      overflow: hidden;
+    }
+
+    .browser-header {
+      background: #e8e8e8;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .browser-dots {
+      display: flex;
+      gap: 6px;
+    }
+
+    .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+
+    .dot.red { background: #ff5f56; }
+    .dot.yellow { background: #ffbd2e; }
+    .dot.green { background: #27ca3f; }
+
+    .extension-popup {
+      width: 400px;
+      background: #f8f9fa;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px;
+      background: linear-gradient(135deg, #7b68ee 0%, #5a4fcf 100%);
+      color: white;
+    }
+
+    .header h1 {
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .icon-btn {
+      background: rgba(255, 255, 255, 0.2);
+      border: none;
+      border-radius: 6px;
+      padding: 6px 8px;
+      color: white;
+      font-size: 14px;
+    }
+
+    .filters-bar {
+      padding: 10px 12px;
+      background: white;
+      border-bottom: 1px solid #e0e0e0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .filter-group {
+      display: flex;
+      gap: 8px;
+    }
+
+    .filter-select {
+      flex: 1;
+      padding: 6px 8px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 12px;
+      background: white;
+    }
+
+    .tasks-container {
+      padding: 8px;
+    }
+
+    .tasks-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .task-item {
+      background: white;
+      border-radius: 8px;
+      padding: 12px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    .task-item.overdue {
+      border-left: 3px solid #f44336;
+    }
+
+    .task-main {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .task-checkbox {
+      width: 20px;
+      height: 20px;
+      border: 2px solid #ccc;
+      border-radius: 50%;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .task-content {
+      flex: 1;
+    }
+
+    .task-name {
+      font-weight: 500;
+      color: #1a1a2e;
+      margin-bottom: 4px;
+      font-size: 14px;
+    }
+
+    .task-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      font-size: 11px;
+      align-items: center;
+    }
+
+    .task-status {
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-weight: 500;
+    }
+
+    .task-priority {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .priority-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .task-time-estimate {
+      background: #f0f0f0;
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: #666;
+    }
+
+    .task-due-time {
+      color: #666;
+    }
+
+    .task-due-time.overdue {
+      color: #f44336;
+      font-weight: 500;
+    }
+
+    .task-due-time.soon {
+      color: #ff9800;
+      font-weight: 500;
+    }
+
+    .task-actions {
+      display: flex;
+      gap: 4px;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid #f0f0f0;
+    }
+
+    .task-action-btn {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 8px;
+      border: none;
+      border-radius: 4px;
+      font-size: 11px;
+      background: #f5f5f5;
+      color: #666;
+    }
+
+    .footer {
+      display: flex;
+      justify-content: space-between;
+      padding: 12px 16px;
+      background: white;
+      border-top: 1px solid #e0e0e0;
+      font-size: 12px;
+      color: #666;
+    }
+
+    .footer-stats {
+      display: flex;
+      gap: 12px;
+    }
+
+    .total-time {
+      color: #7b68ee;
+      font-weight: 500;
+    }
+
+    .completed-count {
+      color: #4caf50;
+      font-weight: 500;
+    }
+
+    .settings-link {
+      color: #7b68ee;
+      text-decoration: none;
+    }
+
+    /* Feature highlights */
+    .feature-list {
+      background: white;
+      border-radius: 16px;
+      padding: 36px;
+      box-shadow: 0 15px 50px rgba(0, 0, 0, 0.2);
+      max-width: 340px;
+    }
+
+    .feature-list h2 {
+      color: #1a1a2e;
+      font-size: 24px;
+      margin-bottom: 24px;
+    }
+
+    .feature-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+
+    .feature-icon {
+      width: 36px;
+      height: 36px;
+      background: linear-gradient(135deg, #7b68ee 0%, #5a4fcf 100%);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      flex-shrink: 0;
+      font-size: 16px;
+    }
+
+    .feature-text h3 {
+      font-size: 15px;
+      color: #1a1a2e;
+      margin-bottom: 3px;
+    }
+
+    .feature-text p {
+      font-size: 13px;
+      color: #666;
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+  <div class="instructions">
+    <strong>How to capture:</strong> On Mac, press <code>Cmd + Shift + 4</code> then drag to select the white-bordered area below.<br>
+    Or use a screenshot tool and crop to exactly 1280×800.
+  </div>
+
+  <!-- Exact 1280x800 screenshot frame -->
+  <div class="screenshot-frame">
+    <!-- Extension Popup -->
+    <div class="browser-frame">
+      <div class="browser-header">
+        <div class="browser-dots">
+          <div class="dot red"></div>
+          <div class="dot yellow"></div>
+          <div class="dot green"></div>
+        </div>
+      </div>
+      <div class="extension-popup">
+        <div class="header">
+          <h1>Tasks Due Today</h1>
+          <button class="icon-btn">↻</button>
+        </div>
+
+        <div class="filters-bar">
+          <div class="filter-group">
+            <select class="filter-select">
+              <option>All Workspaces</option>
+            </select>
+            <select class="filter-select">
+              <option>Sort by Priority</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="tasks-container">
+          <div class="tasks-list">
+            <!-- Task 1 -->
+            <div class="task-item">
+              <div class="task-main">
+                <div class="task-checkbox"></div>
+                <div class="task-content">
+                  <div class="task-name">Review Q4 marketing strategy</div>
+                  <div class="task-meta">
+                    <span class="task-status" style="background: #fff3e0; color: #f57c00;">In Progress</span>
+                    <span class="task-priority">
+                      <span class="priority-dot" style="background: #f44336;"></span>
+                      Urgent
+                    </span>
+                    <span class="task-due-time soon">Due 2:00 PM</span>
+                    <span class="task-time-estimate">2h</span>
+                  </div>
+                </div>
+              </div>
+              <div class="task-actions">
+                <button class="task-action-btn">▶ Start</button>
+                <button class="task-action-btn">⏰ Snooze</button>
+              </div>
+            </div>
+
+            <!-- Task 2 -->
+            <div class="task-item overdue">
+              <div class="task-main">
+                <div class="task-checkbox"></div>
+                <div class="task-content">
+                  <div class="task-name">Send weekly report to stakeholders</div>
+                  <div class="task-meta">
+                    <span class="task-status" style="background: #e3f2fd; color: #1976d2;">To Do</span>
+                    <span class="task-priority">
+                      <span class="priority-dot" style="background: #ff9800;"></span>
+                      High
+                    </span>
+                    <span class="task-due-time overdue">Overdue</span>
+                    <span class="task-time-estimate">30m</span>
+                  </div>
+                </div>
+              </div>
+              <div class="task-actions">
+                <button class="task-action-btn">▶ Start</button>
+                <button class="task-action-btn">⏰ Snooze</button>
+              </div>
+            </div>
+
+            <!-- Task 3 -->
+            <div class="task-item">
+              <div class="task-main">
+                <div class="task-checkbox"></div>
+                <div class="task-content">
+                  <div class="task-name">Update project documentation</div>
+                  <div class="task-meta">
+                    <span class="task-status" style="background: #e8f5e9; color: #388e3c;">Ready</span>
+                    <span class="task-priority">
+                      <span class="priority-dot" style="background: #ffeb3b;"></span>
+                      Normal
+                    </span>
+                    <span class="task-time-estimate">1h 30m</span>
+                  </div>
+                </div>
+              </div>
+              <div class="task-actions">
+                <button class="task-action-btn">▶ Start</button>
+                <button class="task-action-btn">⏰ Snooze</button>
+              </div>
+            </div>
+
+            <!-- Task 4 -->
+            <div class="task-item">
+              <div class="task-main">
+                <div class="task-checkbox"></div>
+                <div class="task-content">
+                  <div class="task-name">Prepare demo for client meeting</div>
+                  <div class="task-meta">
+                    <span class="task-status" style="background: #fce4ec; color: #c2185b;">Blocked</span>
+                    <span class="task-priority">
+                      <span class="priority-dot" style="background: #ff9800;"></span>
+                      High
+                    </span>
+                    <span class="task-due-time">Due 5:00 PM</span>
+                    <span class="task-time-estimate">45m</span>
+                  </div>
+                </div>
+              </div>
+              <div class="task-actions">
+                <button class="task-action-btn">▶ Start</button>
+                <button class="task-action-btn">⏰ Snooze</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="footer">
+          <div class="footer-stats">
+            <span>4 tasks</span>
+            <span class="completed-count">2 completed</span>
+            <span class="total-time">Total: 4h 45m</span>
+          </div>
+          <a href="#" class="settings-link">Settings</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Feature List -->
+    <div class="feature-list">
+      <h2>Features</h2>
+
+      <div class="feature-item">
+        <div class="feature-icon">✓</div>
+        <div class="feature-text">
+          <h3>Quick Overview</h3>
+          <p>See all your tasks due today at a glance</p>
+        </div>
+      </div>
+
+      <div class="feature-item">
+        <div class="feature-icon">⏱</div>
+        <div class="feature-text">
+          <h3>Time Tracking</h3>
+          <p>Start/stop timers that sync to ClickUp</p>
+        </div>
+      </div>
+
+      <div class="feature-item">
+        <div class="feature-icon">⏰</div>
+        <div class="feature-text">
+          <h3>Snooze Tasks</h3>
+          <p>Push tasks to tomorrow with one click</p>
+        </div>
+      </div>
+
+      <div class="feature-item">
+        <div class="feature-icon">🔔</div>
+        <div class="feature-text">
+          <h3>Notifications</h3>
+          <p>Get reminded before tasks are due</p>
+        </div>
+      </div>
+
+      <div class="feature-item">
+        <div class="feature-icon">🏷</div>
+        <div class="feature-text">
+          <h3>Badge Count</h3>
+          <p>Task count on the extension icon</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

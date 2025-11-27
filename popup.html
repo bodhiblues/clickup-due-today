@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ClickUp Tasks Due Today</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <h1>Tasks Due Today</h1>
+      <div class="header-actions">
+        <button id="refresh-btn" class="icon-btn" title="Refresh">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M23 4v6h-6M1 20v-6h6"/>
+            <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Filters Bar -->
+    <div id="filters-bar" class="filters-bar hidden">
+      <div class="filter-group">
+        <select id="workspace-filter" class="filter-select">
+          <option value="all">All Workspaces</option>
+        </select>
+        <select id="sort-select" class="filter-select">
+          <option value="priority">Sort by Priority</option>
+          <option value="due-time">Sort by Due Time</option>
+          <option value="estimate">Sort by Estimate</option>
+          <option value="name">Sort by Name</option>
+        </select>
+      </div>
+      <div class="filter-toggles">
+        <label class="toggle-label" id="overdue-toggle-container">
+          <input type="checkbox" id="overdue-toggle">
+          <span>Show Overdue</span>
+        </label>
+      </div>
+    </div>
+
+    <div id="loading" class="loading">
+      <div class="spinner"></div>
+      <p>Loading tasks...</p>
+    </div>
+
+    <div id="error" class="error hidden">
+      <p id="error-message"></p>
+      <button id="settings-btn" class="btn btn-primary">Open Settings</button>
+    </div>
+
+    <div id="tasks-container" class="tasks-container hidden">
+      <div id="tasks-list" class="tasks-list"></div>
+      <div id="no-tasks" class="no-tasks hidden">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ccc" stroke-width="1.5">
+          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+          <polyline points="22 4 12 14.01 9 11.01"/>
+        </svg>
+        <p>No tasks due today!</p>
+      </div>
+    </div>
+
+    <footer class="footer">
+      <div class="footer-stats">
+        <span id="task-count">0 tasks</span>
+        <span id="completed-count" class="completed-count hidden">0 completed</span>
+        <span id="total-time" class="total-time"></span>
+      </div>
+      <a href="#" id="open-settings" class="settings-link">Settings</a>
+    </footer>
+  </div>
+
+  <!-- Snooze Modal -->
+  <div id="snooze-modal" class="modal hidden">
+    <div class="modal-content">
+      <h3>Snooze Task</h3>
+      <p id="snooze-task-name"></p>
+      <div class="snooze-options">
+        <button class="snooze-option" data-days="1">Tomorrow</button>
+        <button class="snooze-option" data-days="2">In 2 days</button>
+        <button class="snooze-option" data-days="7">Next week</button>
+      </div>
+      <button id="snooze-cancel" class="btn btn-secondary">Cancel</button>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

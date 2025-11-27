@@ -1,0 +1,11 @@
+{
+  "name": "clickup-workload-extension",
+  "version": "1.0.0",
+  "description": "Chrome extension to view ClickUp tasks due today",
+  "scripts": {
+    "generate-icons": "node scripts/generate-icons.js"
+  },
+  "devDependencies": {
+    "canvas": "^2.11.2"
+  }
+}
