@@ -152,10 +152,14 @@ saveFeaturesBtn.addEventListener('click', async () => {
   saveFeaturesBtn.textContent = 'Saving...';
 
   try {
+    // Validate idle threshold (minimum 1 minute, no maximum - let users set what they want)
+    const idleThreshold = parseInt(idleThresholdInput.value, 10);
+    const validIdleThreshold = isNaN(idleThreshold) || idleThreshold < 1 ? 1 : idleThreshold;
+
     const settings = {
       features: {},
       notificationMinutes: parseInt(notificationMinutesInput.value, 10) || 15,
-      idleThresholdMinutes: parseInt(idleThresholdInput.value, 10) || 1
+      idleThresholdMinutes: validIdleThreshold
     };
 
     // Gather all feature toggle states

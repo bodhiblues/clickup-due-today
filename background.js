@@ -49,7 +49,14 @@ async function updateIdleThreshold() {
   try {
     const { settings } = await chrome.storage.sync.get(['settings']);
     const currentSettings = settings || defaultSettings;
-    const thresholdSeconds = (currentSettings.idleThresholdMinutes || 1) * 60;
+
+    // Validate threshold (minimum 1 minute = 60 seconds, Chrome's minimum is 15 seconds)
+    let thresholdMinutes = currentSettings.idleThresholdMinutes;
+    if (typeof thresholdMinutes !== 'number' || isNaN(thresholdMinutes) || thresholdMinutes < 1) {
+      thresholdMinutes = 1;
+    }
+
+    const thresholdSeconds = thresholdMinutes * 60;
     chrome.idle.setDetectionInterval(thresholdSeconds);
   } catch (err) {
     // Fallback to default 1 minute
