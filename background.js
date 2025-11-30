@@ -20,6 +20,9 @@ const defaultSettings = {
 // Track notified tasks to avoid duplicate notifications
 const notifiedTasks = new Set();
 
+// Track if a timer is currently recording
+let isTimerRecording = false;
+
 // Initialize
 chrome.runtime.onInstalled.addListener(() => {
   // Set up alarm for periodic updates
@@ -27,8 +30,33 @@ chrome.runtime.onInstalled.addListener(() => {
   chrome.alarms.create('checkNotifications', { periodInMinutes: 1 });
 
   // Initial update
-  updateBadgeCount();
+  checkPersistedTimers();
 });
+
+// Also check on startup (for when browser restarts)
+chrome.runtime.onStartup.addListener(() => {
+  checkPersistedTimers();
+});
+
+// Check if there are persisted timers and update badge accordingly
+async function checkPersistedTimers() {
+  try {
+    const result = await chrome.storage.local.get(['activeTimers']);
+    const persistedTimers = result.activeTimers || {};
+    const hasActiveTimers = Object.keys(persistedTimers).length > 0;
+
+    if (hasActiveTimers) {
+      isTimerRecording = true;
+      showRecordingBadge();
+    } else {
+      isTimerRecording = false;
+      updateBadgeCount();
+    }
+  } catch (err) {
+    console.error('Error checking persisted timers:', err);
+    updateBadgeCount();
+  }
+}
 
 // Listen for alarms
 chrome.alarms.onAlarm.addListener((alarm) => {
@@ -48,11 +76,29 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   } else if (message.type === 'GET_TASKS') {
     fetchTasks().then(tasks => sendResponse({ tasks }));
     return true; // Keep channel open for async response
+  } else if (message.type === 'TIMER_STARTED') {
+    isTimerRecording = true;
+    showRecordingBadge();
+  } else if (message.type === 'TIMER_STOPPED') {
+    isTimerRecording = false;
+    updateBadgeCount();
   }
 });
 
+// Show recording indicator on badge
+function showRecordingBadge() {
+  chrome.action.setBadgeText({ text: '●' });
+  chrome.action.setBadgeBackgroundColor({ color: '#f44336' }); // Red background
+}
+
 // Update badge count
 async function updateBadgeCount() {
+  // If timer is recording, show recording badge instead of count
+  if (isTimerRecording) {
+    showRecordingBadge();
+    return;
+  }
+
   try {
     const { clickupApiKey, settings } = await chrome.storage.sync.get(['clickupApiKey', 'settings']);
     const currentSettings = settings || defaultSettings;
@@ -153,6 +199,11 @@ chrome.notifications.onClicked.addListener((notificationId) => {
 
 // Fetch tasks with provided API key
 async function fetchTasksWithKey(apiKey, includeOverdue = false) {
+  // Check if we have a valid API key
+  if (!apiKey) {
+    return [];
+  }
+
   try {
     // Get current user
     const userResponse = await fetch(`${API_BASE}/user`, {
@@ -162,7 +213,10 @@ async function fetchTasksWithKey(apiKey, includeOverdue = false) {
       }
     });
 
-    if (!userResponse.ok) throw new Error('Failed to get user');
+    if (!userResponse.ok) {
+      console.warn('Failed to get user, status:', userResponse.status);
+      return [];
+    }
     const userData = await userResponse.json();
     const currentUserId = userData.user.id;
 
@@ -174,7 +228,10 @@ async function fetchTasksWithKey(apiKey, includeOverdue = false) {
       }
     });
 
-    if (!teamsResponse.ok) throw new Error('Failed to get teams');
+    if (!teamsResponse.ok) {
+      console.warn('Failed to get teams, status:', teamsResponse.status);
+      return [];
+    }
     const teamsData = await teamsResponse.json();
 
     if (!teamsData.teams || teamsData.teams.length === 0) {
@@ -232,13 +289,19 @@ async function fetchTasksWithKey(apiKey, includeOverdue = false) {
           }
         }
       } catch (err) {
-        console.error(`Error fetching tasks for team ${team.name}:`, err);
+        // Suppress network errors which are expected when offline
+        if (err.message !== 'Failed to fetch') {
+          console.error(`Error fetching tasks for team ${team.name}:`, err);
+        }
       }
     }
 
     return allTasks;
   } catch (err) {
-    console.error('Error fetching tasks:', err);
+    // Only log if it's not a network error (which is expected when offline)
+    if (err.message !== 'Failed to fetch') {
+      console.error('Error fetching tasks:', err);
+    }
     return [];
   }
 }

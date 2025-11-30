@@ -37,6 +37,7 @@ const workspaceFilter = document.getElementById('workspace-filter');
 const sortSelect = document.getElementById('sort-select');
 const overdueToggle = document.getElementById('overdue-toggle');
 const overdueToggleContainer = document.getElementById('overdue-toggle-container');
+const completedToggle = document.getElementById('completed-toggle');
 
 // Snooze modal elements
 const snoozeModal = document.getElementById('snooze-modal');
@@ -49,6 +50,7 @@ let apiKey = '';
 let settings = defaultSettings;
 let allTasks = [];
 let teams = [];
+let spaces = {}; // spaceId -> spaceName lookup
 let activeTimers = {}; // taskId -> { startTime, intervalId }
 let currentSnoozeTaskId = null;
 
@@ -65,11 +67,47 @@ async function init() {
     return;
   }
 
+  // Load persisted timer state
+  await loadPersistedTimers();
+
   // Setup UI based on settings
   setupUI();
 
   // Load tasks
   loadTasks();
+}
+
+// Load timer state from storage and resume timers
+async function loadPersistedTimers() {
+  try {
+    const result = await chrome.storage.local.get(['activeTimers']);
+    const persistedTimers = result.activeTimers || {};
+
+    // Restore active timers (we'll update the UI after tasks load)
+    for (const [taskId, timerData] of Object.entries(persistedTimers)) {
+      activeTimers[taskId] = {
+        startTime: timerData.startTime,
+        intervalId: null // Will be set up when task element is rendered
+      };
+    }
+  } catch (err) {
+    console.error('Error loading persisted timers:', err);
+  }
+}
+
+// Save timer state to storage
+async function persistTimerState() {
+  try {
+    const timersToSave = {};
+    for (const [taskId, timerData] of Object.entries(activeTimers)) {
+      timersToSave[taskId] = {
+        startTime: timerData.startTime
+      };
+    }
+    await chrome.storage.local.set({ activeTimers: timersToSave });
+  } catch (err) {
+    console.error('Error persisting timer state:', err);
+  }
 }
 
 function setupUI() {
@@ -103,6 +141,7 @@ openSettingsLink.addEventListener('click', (e) => {
 workspaceFilter.addEventListener('change', () => renderTasks(allTasks));
 sortSelect.addEventListener('change', () => renderTasks(allTasks));
 overdueToggle.addEventListener('change', loadTasks);
+completedToggle.addEventListener('change', loadTasks);
 
 // Snooze modal event listeners
 snoozeCancel.addEventListener('click', closeSnoozeModal);
@@ -153,6 +192,21 @@ async function loadTasks() {
       return;
     }
 
+    // Fetch spaces for each team to build space name lookup
+    spaces = {};
+    for (const team of teams) {
+      try {
+        const spacesResponse = await fetchAPI(`/team/${team.id}/space`);
+        if (spacesResponse.spaces) {
+          spacesResponse.spaces.forEach(space => {
+            spaces[space.id] = space.name;
+          });
+        }
+      } catch (err) {
+        console.error(`Error fetching spaces for team ${team.name}:`, err);
+      }
+    }
+
     // Populate workspace filter
     populateWorkspaceFilter();
 
@@ -168,16 +222,20 @@ async function loadTasks() {
     // Check if we should include overdue tasks
     const includeOverdue = settings.features.overdue || overdueToggle.checked;
 
+    // Check if we should include completed tasks
+    const includeCompleted = completedToggle.checked;
+
     // Fetch tasks
     allTasks = [];
 
     for (const team of teams) {
       try {
         let url;
+        const includeClosed = includeCompleted ? 'true' : 'false';
         if (includeOverdue) {
-          url = `/team/${team.id}/task?assignees[]=${currentUserId}&due_date_lt=${todayEndMs + 1}&include_closed=false&subtasks=true`;
+          url = `/team/${team.id}/task?assignees[]=${currentUserId}&due_date_lt=${todayEndMs + 1}&include_closed=${includeClosed}&subtasks=true`;
         } else {
-          url = `/team/${team.id}/task?assignees[]=${currentUserId}&due_date_gt=${todayStart - 1}&due_date_lt=${todayEndMs + 1}&include_closed=false&subtasks=true`;
+          url = `/team/${team.id}/task?assignees[]=${currentUserId}&due_date_gt=${todayStart - 1}&due_date_lt=${todayEndMs + 1}&include_closed=${includeClosed}&subtasks=true`;
         }
 
         const tasksResponse = await fetchAPI(url);
@@ -197,6 +255,7 @@ async function loadTasks() {
             task.teamName = team.name;
             task.teamId = team.id;
             task.isOverdue = parseInt(task.due_date, 10) < todayStart;
+            task.isCompleted = task.status?.type === 'closed';
             allTasks.push(task);
           });
         }
@@ -402,6 +461,10 @@ function createTaskElement(task) {
     div.classList.add('overdue');
   }
 
+  if (task.isCompleted) {
+    div.classList.add('completed');
+  }
+
   // Priority info
   const priority = task.priority ? task.priority.priority : null;
   const priorityClass = priority ? `priority-${priority}` : 'priority-normal';
@@ -456,6 +519,30 @@ function createTaskElement(task) {
     timeTrackedHtml = `<span class="task-time-info">${trackedStr} tracked</span>`;
   }
 
+  // Build breadcrumb trail (Space > Folder > List)
+  let breadcrumbHtml = '';
+  const spaceName = task.space?.id ? spaces[task.space.id] : null;
+  const folderName = task.folder?.name && task.folder.name !== 'hidden' ? task.folder.name : null;
+  const breadcrumbListName = task.list?.name;
+
+  if (spaceName || folderName || breadcrumbListName) {
+    breadcrumbHtml = '<div class="task-breadcrumb">';
+    const parts = [];
+
+    if (spaceName) {
+      parts.push(`<span class="breadcrumb-item breadcrumb-space">${escapeHtml(spaceName)}</span>`);
+    }
+    if (folderName) {
+      parts.push(`<span class="breadcrumb-item breadcrumb-folder">${escapeHtml(folderName)}</span>`);
+    }
+    if (breadcrumbListName) {
+      parts.push(`<span class="breadcrumb-item breadcrumb-list">${escapeHtml(breadcrumbListName)}</span>`);
+    }
+
+    breadcrumbHtml += parts.join('<span class="breadcrumb-separator">›</span>');
+    breadcrumbHtml += '</div>';
+  }
+
   // Build task actions
   let actionsHtml = '';
   if (settings.features.timeTracking || settings.features.snooze) {
@@ -499,6 +586,7 @@ function createTaskElement(task) {
       <div class="task-checkbox" title="Mark as complete"></div>
       <div class="task-content">
         <div class="task-name">${escapeHtml(task.name)}</div>
+        ${breadcrumbHtml}
         <div class="task-meta">
           <span class="task-status" style="background: ${statusColor}20; color: ${statusColor}">
             ${escapeHtml(statusName)}
@@ -512,7 +600,6 @@ function createTaskElement(task) {
           ${dueTimeHtml}
           ${timeEstimate ? `<span class="task-time-estimate">${timeEstimate}</span>` : ''}
           ${timeTrackedHtml}
-          ${listName && !settings.features.grouping ? `<span class="task-list-name">${escapeHtml(listName)}</span>` : ''}
         </div>
       </div>
     </div>
@@ -539,6 +626,24 @@ function createTaskElement(task) {
       e.stopPropagation();
       toggleTimer(task.id, timerBtn);
     });
+
+    // Resume interval for persisted timers
+    if (activeTimers[task.id] && !activeTimers[task.id].intervalId) {
+      const startTime = activeTimers[task.id].startTime;
+      activeTimers[task.id].intervalId = setInterval(() => {
+        const elapsed = Date.now() - startTime;
+        const timerText = timerBtn.querySelector('.timer-text');
+        if (timerText) {
+          timerText.textContent = formatTimer(elapsed);
+        }
+      }, 1000);
+
+      // Update display immediately
+      const timerText = timerBtn.querySelector('.timer-text');
+      if (timerText) {
+        timerText.textContent = formatTimer(Date.now() - startTime);
+      }
+    }
   }
 
   // Snooze button
@@ -572,8 +677,17 @@ async function completeTask(taskId, taskElement) {
 
     // Stop timer if running
     if (activeTimers[taskId]) {
-      clearInterval(activeTimers[taskId].intervalId);
+      if (activeTimers[taskId].intervalId) {
+        clearInterval(activeTimers[taskId].intervalId);
+      }
       delete activeTimers[taskId];
+      persistTimerState();
+
+      // Notify background about timer state change
+      const hasActiveTimers = Object.keys(activeTimers).length > 0;
+      chrome.runtime.sendMessage({
+        type: hasActiveTimers ? 'TIMER_STARTED' : 'TIMER_STOPPED'
+      });
     }
 
     setTimeout(() => {
@@ -629,13 +743,19 @@ function startTimer(taskId, button) {
     </svg>
     <span class="timer-text">0:00</span>
   `;
+
+  // Persist timer state and notify background
+  persistTimerState();
+  chrome.runtime.sendMessage({ type: 'TIMER_STARTED', taskId });
 }
 
 async function stopTimer(taskId, button) {
   const timer = activeTimers[taskId];
   if (!timer) return;
 
-  clearInterval(timer.intervalId);
+  if (timer.intervalId) {
+    clearInterval(timer.intervalId);
+  }
   const elapsed = Date.now() - timer.startTime;
 
   // Log time to ClickUp
@@ -665,6 +785,13 @@ async function stopTimer(taskId, button) {
     </svg>
     <span class="timer-text">Start</span>
   `;
+
+  // Persist timer state and notify background
+  persistTimerState();
+  const hasActiveTimers = Object.keys(activeTimers).length > 0;
+  chrome.runtime.sendMessage({
+    type: hasActiveTimers ? 'TIMER_STARTED' : 'TIMER_STOPPED'
+  });
 
   // Refresh to show updated time
   loadTasks();
