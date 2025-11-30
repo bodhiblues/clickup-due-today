@@ -87,6 +87,8 @@ async function loadPersistedTimers() {
     for (const [taskId, timerData] of Object.entries(persistedTimers)) {
       activeTimers[taskId] = {
         startTime: timerData.startTime,
+        pausedDuration: timerData.pausedDuration || 0,
+        pausedAt: timerData.pausedAt || null,
         intervalId: null // Will be set up when task element is rendered
       };
     }
@@ -101,13 +103,31 @@ async function persistTimerState() {
     const timersToSave = {};
     for (const [taskId, timerData] of Object.entries(activeTimers)) {
       timersToSave[taskId] = {
-        startTime: timerData.startTime
+        startTime: timerData.startTime,
+        pausedDuration: timerData.pausedDuration || 0,
+        pausedAt: timerData.pausedAt || null
       };
     }
     await chrome.storage.local.set({ activeTimers: timersToSave });
   } catch (err) {
     console.error('Error persisting timer state:', err);
   }
+}
+
+// Calculate effective elapsed time (excluding paused duration)
+function getEffectiveElapsed(timerData) {
+  const now = Date.now();
+  let elapsed = now - timerData.startTime;
+
+  // Subtract total paused duration
+  elapsed -= (timerData.pausedDuration || 0);
+
+  // If currently paused, also subtract time since pause started
+  if (timerData.pausedAt) {
+    elapsed -= (now - timerData.pausedAt);
+  }
+
+  return Math.max(0, elapsed);
 }
 
 function setupUI() {
@@ -629,9 +649,8 @@ function createTaskElement(task) {
 
     // Resume interval for persisted timers
     if (activeTimers[task.id] && !activeTimers[task.id].intervalId) {
-      const startTime = activeTimers[task.id].startTime;
       activeTimers[task.id].intervalId = setInterval(() => {
-        const elapsed = Date.now() - startTime;
+        const elapsed = getEffectiveElapsed(activeTimers[task.id]);
         const timerText = timerBtn.querySelector('.timer-text');
         if (timerText) {
           timerText.textContent = formatTimer(elapsed);
@@ -641,7 +660,7 @@ function createTaskElement(task) {
       // Update display immediately
       const timerText = timerBtn.querySelector('.timer-text');
       if (timerText) {
-        timerText.textContent = formatTimer(Date.now() - startTime);
+        timerText.textContent = formatTimer(getEffectiveElapsed(activeTimers[task.id]));
       }
     }
   }
@@ -726,8 +745,10 @@ function startTimer(taskId, button) {
 
   activeTimers[taskId] = {
     startTime,
+    pausedDuration: 0,
+    pausedAt: null,
     intervalId: setInterval(() => {
-      const elapsed = Date.now() - startTime;
+      const elapsed = getEffectiveElapsed(activeTimers[taskId]);
       const timerText = button.querySelector('.timer-text');
       if (timerText) {
         timerText.textContent = formatTimer(elapsed);
@@ -756,7 +777,9 @@ async function stopTimer(taskId, button) {
   if (timer.intervalId) {
     clearInterval(timer.intervalId);
   }
-  const elapsed = Date.now() - timer.startTime;
+
+  // Calculate effective elapsed time (excluding paused time)
+  const effectiveElapsed = getEffectiveElapsed(timer);
 
   // Log time to ClickUp
   try {
@@ -767,7 +790,7 @@ async function stopTimer(taskId, button) {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        duration: elapsed,
+        duration: effectiveElapsed,
         start: timer.startTime,
         end: Date.now()
       })

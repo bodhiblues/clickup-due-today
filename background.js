@@ -23,11 +23,17 @@ const notifiedTasks = new Set();
 // Track if a timer is currently recording
 let isTimerRecording = false;
 
+// Idle detection threshold (seconds of inactivity before considered idle)
+const IDLE_THRESHOLD_SECONDS = 60;
+
 // Initialize
 chrome.runtime.onInstalled.addListener(() => {
   // Set up alarm for periodic updates
   chrome.alarms.create('updateBadge', { periodInMinutes: 5 });
   chrome.alarms.create('checkNotifications', { periodInMinutes: 1 });
+
+  // Set idle detection threshold
+  chrome.idle.setDetectionInterval(IDLE_THRESHOLD_SECONDS);
 
   // Initial update
   checkPersistedTimers();
@@ -35,7 +41,56 @@ chrome.runtime.onInstalled.addListener(() => {
 
 // Also check on startup (for when browser restarts)
 chrome.runtime.onStartup.addListener(() => {
+  chrome.idle.setDetectionInterval(IDLE_THRESHOLD_SECONDS);
   checkPersistedTimers();
+});
+
+// Listen for idle state changes
+chrome.idle.onStateChanged.addListener(async (newState) => {
+  try {
+    const result = await chrome.storage.local.get(['activeTimers']);
+    const activeTimers = result.activeTimers || {};
+
+    // No active timers, nothing to do
+    if (Object.keys(activeTimers).length === 0) {
+      return;
+    }
+
+    const now = Date.now();
+
+    if (newState === 'idle' || newState === 'locked') {
+      // User went idle/locked - pause all timers
+      for (const taskId of Object.keys(activeTimers)) {
+        if (!activeTimers[taskId].pausedAt) {
+          activeTimers[taskId].pausedAt = now;
+        }
+      }
+      await chrome.storage.local.set({ activeTimers });
+
+      // Update badge to show paused state
+      chrome.action.setBadgeText({ text: '⏸' });
+      chrome.action.setBadgeBackgroundColor({ color: '#ff9800' }); // Orange for paused
+
+    } else if (newState === 'active') {
+      // User became active - resume all timers
+      for (const taskId of Object.keys(activeTimers)) {
+        if (activeTimers[taskId].pausedAt) {
+          // Calculate how long the timer was paused
+          const pausedDuration = now - activeTimers[taskId].pausedAt;
+          activeTimers[taskId].pausedDuration = (activeTimers[taskId].pausedDuration || 0) + pausedDuration;
+          activeTimers[taskId].pausedAt = null;
+        }
+      }
+      await chrome.storage.local.set({ activeTimers });
+
+      // Restore recording badge
+      if (isTimerRecording) {
+        showRecordingBadge();
+      }
+    }
+  } catch (err) {
+    console.error('Error handling idle state change:', err);
+  }
 });
 
 // Check if there are persisted timers and update badge accordingly
