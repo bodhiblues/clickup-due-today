@@ -15,7 +15,8 @@ const defaultSettings = {
     notifications: false,
     idleDetection: true
   },
-  notificationMinutes: 15
+  notificationMinutes: 15,
+  idleThresholdMinutes: 1
 };
 
 // Track notified tasks to avoid duplicate notifications
@@ -24,17 +25,14 @@ const notifiedTasks = new Set();
 // Track if a timer is currently recording
 let isTimerRecording = false;
 
-// Idle detection threshold (seconds of inactivity before considered idle)
-const IDLE_THRESHOLD_SECONDS = 60;
-
 // Initialize
 chrome.runtime.onInstalled.addListener(() => {
   // Set up alarm for periodic updates
   chrome.alarms.create('updateBadge', { periodInMinutes: 5 });
   chrome.alarms.create('checkNotifications', { periodInMinutes: 1 });
 
-  // Set idle detection threshold
-  chrome.idle.setDetectionInterval(IDLE_THRESHOLD_SECONDS);
+  // Set idle detection threshold from settings
+  updateIdleThreshold();
 
   // Initial update
   checkPersistedTimers();
@@ -42,9 +40,22 @@ chrome.runtime.onInstalled.addListener(() => {
 
 // Also check on startup (for when browser restarts)
 chrome.runtime.onStartup.addListener(() => {
-  chrome.idle.setDetectionInterval(IDLE_THRESHOLD_SECONDS);
+  updateIdleThreshold();
   checkPersistedTimers();
 });
+
+// Update idle detection threshold from settings
+async function updateIdleThreshold() {
+  try {
+    const { settings } = await chrome.storage.sync.get(['settings']);
+    const currentSettings = settings || defaultSettings;
+    const thresholdSeconds = (currentSettings.idleThresholdMinutes || 1) * 60;
+    chrome.idle.setDetectionInterval(thresholdSeconds);
+  } catch (err) {
+    // Fallback to default 1 minute
+    chrome.idle.setDetectionInterval(60);
+  }
+}
 
 // Listen for idle state changes
 chrome.idle.onStateChanged.addListener(async (newState) => {
@@ -135,6 +146,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'SETTINGS_UPDATED') {
     updateBadgeCount();
+    updateIdleThreshold();
   } else if (message.type === 'UPDATE_BADGE') {
     updateBadgeCount();
   } else if (message.type === 'GET_TASKS') {

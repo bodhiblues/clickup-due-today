@@ -15,7 +15,8 @@ const defaultSettings = {
     notifications: false,
     idleDetection: true
   },
-  notificationMinutes: 15
+  notificationMinutes: 15,
+  idleThresholdMinutes: 1
 };
 
 // DOM Elements

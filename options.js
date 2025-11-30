@@ -8,6 +8,7 @@ const apiStatusEl = document.getElementById('api-status');
 const saveFeaturesBtn = document.getElementById('save-features-btn');
 const featuresStatusEl = document.getElementById('features-status');
 const notificationSettingsEl = document.getElementById('notification-settings');
+const idleSettingsEl = document.getElementById('idle-settings');
 
 // Feature toggles
 const featureToggles = {
@@ -25,6 +26,7 @@ const featureToggles = {
 };
 
 const notificationMinutesInput = document.getElementById('notification-minutes');
+const idleThresholdInput = document.getElementById('idle-threshold');
 
 // Default settings
 const defaultSettings = {
@@ -41,7 +43,8 @@ const defaultSettings = {
     notifications: false,
     idleDetection: true
   },
-  notificationMinutes: 15
+  notificationMinutes: 15,
+  idleThresholdMinutes: 1
 };
 
 // Load saved settings
@@ -66,8 +69,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     notificationMinutesInput.value = settings.notificationMinutes;
   }
 
+  // Load idle threshold
+  if (settings.idleThresholdMinutes) {
+    idleThresholdInput.value = settings.idleThresholdMinutes;
+  }
+
   // Show/hide notification settings based on toggle
   updateNotificationSettings();
+
+  // Show/hide idle settings based on toggle
+  updateIdleSettings();
 });
 
 // Toggle notification settings visibility
@@ -78,6 +89,17 @@ function updateNotificationSettings() {
     notificationSettingsEl.classList.remove('hidden');
   } else {
     notificationSettingsEl.classList.add('hidden');
+  }
+}
+
+// Toggle idle settings visibility
+featureToggles.idleDetection.addEventListener('change', updateIdleSettings);
+
+function updateIdleSettings() {
+  if (featureToggles.idleDetection.checked) {
+    idleSettingsEl.classList.remove('hidden');
+  } else {
+    idleSettingsEl.classList.add('hidden');
   }
 }
 
@@ -132,7 +154,8 @@ saveFeaturesBtn.addEventListener('click', async () => {
   try {
     const settings = {
       features: {},
-      notificationMinutes: parseInt(notificationMinutesInput.value, 10) || 15
+      notificationMinutes: parseInt(notificationMinutesInput.value, 10) || 15,
+      idleThresholdMinutes: parseInt(idleThresholdInput.value, 10) || 1
     };
 
     // Gather all feature toggle states
