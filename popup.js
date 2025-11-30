@@ -12,7 +12,8 @@ const defaultSettings = {
     timeTracking: true,
     snooze: true,
     filters: true,
-    notifications: false
+    notifications: false,
+    idleDetection: true
   },
   notificationMinutes: 15
 };

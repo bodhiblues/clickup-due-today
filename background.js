@@ -12,7 +12,8 @@ const defaultSettings = {
     timeTracking: true,
     snooze: true,
     filters: true,
-    notifications: false
+    notifications: false,
+    idleDetection: true
   },
   notificationMinutes: 15
 };
@@ -48,6 +49,14 @@ chrome.runtime.onStartup.addListener(() => {
 // Listen for idle state changes
 chrome.idle.onStateChanged.addListener(async (newState) => {
   try {
+    // Check if idle detection is enabled
+    const { settings } = await chrome.storage.sync.get(['settings']);
+    const currentSettings = settings || defaultSettings;
+
+    if (!currentSettings.features.idleDetection) {
+      return; // Idle detection is disabled, do nothing
+    }
+
     const result = await chrome.storage.local.get(['activeTimers']);
     const activeTimers = result.activeTimers || {};
 

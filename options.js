@@ -20,7 +20,8 @@ const featureToggles = {
   timeTracking: document.getElementById('feature-time-tracking'),
   snooze: document.getElementById('feature-snooze'),
   filters: document.getElementById('feature-filters'),
-  notifications: document.getElementById('feature-notifications')
+  notifications: document.getElementById('feature-notifications'),
+  idleDetection: document.getElementById('feature-idle-detection')
 };
 
 const notificationMinutesInput = document.getElementById('notification-minutes');
@@ -37,7 +38,8 @@ const defaultSettings = {
     timeTracking: true,
     snooze: true,
     filters: true,
-    notifications: false
+    notifications: false,
+    idleDetection: true
   },
   notificationMinutes: 15
 };
