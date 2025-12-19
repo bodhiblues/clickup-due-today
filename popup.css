@@ -317,6 +317,11 @@ body {
   color: #2e7d32;
 }
 
+.breadcrumb-parent {
+  background: #f3e5f5;
+  color: #7b1fa2;
+}
+
 .breadcrumb-separator {
   color: #999;
   font-size: 8px;

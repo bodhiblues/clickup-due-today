@@ -53,6 +53,7 @@ let settings = defaultSettings;
 let allTasks = [];
 let teams = [];
 let spaces = {}; // spaceId -> spaceName lookup
+let parentTasks = {}; // parentId -> parentName lookup
 let activeTimers = {}; // taskId -> { startTime, intervalId }
 let currentSnoozeTaskId = null;
 
@@ -285,6 +286,20 @@ async function loadTasks() {
         console.error(`Error fetching tasks for team ${team.name}:`, err);
       }
     }
+
+    // Fetch parent task names for subtasks
+    parentTasks = {};
+    const parentIds = [...new Set(allTasks.filter(t => t.parent).map(t => t.parent))];
+    await Promise.all(parentIds.map(async (parentId) => {
+      try {
+        const parentTask = await fetchAPI(`/task/${parentId}`);
+        if (parentTask && parentTask.name) {
+          parentTasks[parentId] = parentTask.name;
+        }
+      } catch (err) {
+        console.error(`Error fetching parent task ${parentId}:`, err);
+      }
+    }));
 
     // Load completed today count if enabled
     if (settings.features.completedCount) {
@@ -547,7 +562,9 @@ function createTaskElement(task) {
   const folderName = task.folder?.name && task.folder.name !== 'hidden' ? task.folder.name : null;
   const breadcrumbListName = task.list?.name;
 
-  if (spaceName || folderName || breadcrumbListName) {
+  const parentTaskName = task.parent ? parentTasks[task.parent] : null;
+
+  if (spaceName || folderName || breadcrumbListName || parentTaskName) {
     breadcrumbHtml = '<div class="task-breadcrumb">';
     const parts = [];
 
@@ -559,6 +576,9 @@ function createTaskElement(task) {
     }
     if (breadcrumbListName) {
       parts.push(`<span class="breadcrumb-item breadcrumb-list">${escapeHtml(breadcrumbListName)}</span>`);
+    }
+    if (parentTaskName) {
+      parts.push(`<span class="breadcrumb-item breadcrumb-parent">${escapeHtml(parentTaskName)}</span>`);
     }
 
     breadcrumbHtml += parts.join('<span class="breadcrumb-separator">›</span>');
