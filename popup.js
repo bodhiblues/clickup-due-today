@@ -705,6 +705,20 @@ async function completeTask(taskId, taskElement) {
   taskElement.classList.add('completed');
 
   try {
+    // Find the task to get list info
+    const task = allTasks.find(t => t.id === taskId);
+    if (!task || !task.list?.id) {
+      throw new Error('Task or list not found');
+    }
+
+    // Fetch list to get available statuses
+    const list = await fetchAPI(`/list/${task.list.id}`);
+    const closedStatus = list.statuses?.find(s => s.type === 'closed');
+    if (!closedStatus) {
+      throw new Error('No closed status found for this list');
+    }
+
+    // Update task with the correct closed status name
     await fetch(`${API_BASE}/task/${taskId}`, {
       method: 'PUT',
       headers: {
@@ -712,7 +726,7 @@ async function completeTask(taskId, taskElement) {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        status: 'closed'
+        status: closedStatus.status
       })
     });
 
